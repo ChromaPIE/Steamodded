@@ -113,3 +113,90 @@ if cardTable.unique_val__saved_ID and G.ID <= cardTable.unique_val__saved_ID the
     G.ID = cardTable.unique_val__saved_ID + 1
 end"""
 match_indent = true
+
+## Vars in card descriptions should use `card.ability` instead of `_c.config` where possible
+# generate_card_ui()
+[[patches]]
+[patches.pattern]
+target = 'functions/common_events.lua'
+pattern = 'function generate_card_ui(_c, full_UI_table, specific_vars, card_type, badges, hide_desc, main_start, main_end)'
+position = 'at'
+match_indent = true
+payload = 'function generate_card_ui(_c, full_UI_table, specific_vars, card_type, badges, hide_desc, main_start, main_end, card)'
+
+[[patches]]
+[patches.pattern]
+target = 'functions/common_events.lua'
+pattern = "if _c.set == 'Other' then"
+position = 'before'
+match_indent = true
+payload = "local cfg = (card and card.ability) or _c['config']" # string index to make sure the next patch doesn't eat it
+
+[[patches]]
+[patches.regex]
+target = 'functions/common_events.lua'
+pattern = '_c.config'
+position = 'at'
+payload = 'cfg'
+
+## When overriding with set_ability and card is added to deck, call add / remove effects
+# Card:set_ability()
+[[patches]]
+[patches.pattern]
+target = 'card.lua'
+pattern = "self.config.center = center"
+position = 'before'
+match_indent = true
+payload = '''
+if self.added_to_deck and old_center and not self.debuff then
+    self:remove_from_deck()
+    self.added_to_deck = true
+end'''
+
+[[patches]]
+[patches.pattern]
+target = 'card.lua'
+pattern = "if G.consumeables and self.area == G.consumeables then"
+position = 'before'
+match_indent = true
+payload = '''
+if self.added_to_deck and old_center and not self.debuff then
+    self.added_to_deck = false
+    self:add_to_deck()
+end'''
+
+## set_ability() transfers over old fields
+# special cases:
+# extra_value should be transferred
+# name, effect, set, extra should always be overwritten
+[[patches]]
+[patches.regex]
+target = 'card.lua'
+pattern = '''
+(?<indent>[\t ]*)self\.ability = (\{[\s\S]*?
+[\t ]*\})
+'''
+position = 'at'
+line_prepend = '$indent'
+payload = '''
+local new_ability = $2
+self.ability = self.ability or {}
+new_ability.extra_value = nil
+self.ability.extra_value = self.ability.extra_value or 0
+for k, v in pairs(new_ability) do
+    self.ability[k] = v
+end
+for _, k in ipairs{'name', 'effect', 'set', 'extra'} do
+    self.ability[k] = new_ability[k]
+end
+'''
+
+## Fix crash if self.config.card == nil for non-vanilla set_ability() calls
+# Card:set_ability()
+[[patches]]
+[patches.pattern]
+target = 'card.lua'
+pattern = "self.label = center.label or self.config.card.label or self.ability.set"
+position = 'at'
+match_indent = true
+payload = "self.label = center.label or self.config.card and self.config.card.label or self.ability.set"
