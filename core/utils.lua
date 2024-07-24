@@ -186,14 +186,21 @@ end
 function SMODS.handle_loc_file(path)
     local dir = path .. 'localization/'
 	local file_name
-    for k, v in ipairs({ dir .. G.SETTINGS.language .. '.lua', dir .. 'default.lua', dir .. 'en-us.lua' }) do
+    for k, v in ipairs({ dir .. G.SETTINGS.language .. '.lua', dir .. 'default.lua', dir .. 'en-us.lua', dir .. G.SETTINGS.language .. '.json', dir .. 'default.json', dir .. 'en-us.json' }) do
         if NFS.getInfo(v) then
             file_name = v
             break
         end
     end
     if not file_name then return end
-    local loc_table = assert(loadstring(NFS.read(file_name)))()
+
+    -- check if file name ends in .json
+    local loc_table = nil
+    if file_name:lower():match("%.json$") then
+        loc_table = assert(JSON.decode(NFS.read(file_name)))
+    else
+        loc_table = assert(loadstring(NFS.read(file_name)))()
+    end
     local function recurse(target, ref_table)
         if type(target) ~= 'table' then return end --this shouldn't happen unless there's a bad return value
         for k, v in pairs(target) do
@@ -559,6 +566,21 @@ function HUE(s, t, h)
 	if hs < 3 then return t end
 	if hs < 4 then return (t-s) * (4-hs) + s end
 	return s
+end
+
+function round_number(num, precision)
+	precision = 10^(precision or 0)
+	
+	return math.floor(num * precision + 0.4999999999999994) / precision
+end
+
+-- Formatting util for UI elements (look number_formatting.toml)
+function format_ui_value(value)
+    if type(value) ~= "number" then
+        return tostring(value)
+    end
+
+    return number_format(value, 1000000)
 end
 
 --#endregion
