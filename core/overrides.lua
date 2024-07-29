@@ -1036,7 +1036,7 @@ function poll_edition(_key, _mod, _no_neg, _guaranteed, _options)
 		-- sendDebugMessage(v.name.." weight is "..v.weight*_modifier)
 		-- sendDebugMessage("Checking for "..v.name.." at "..(1 - (weight_i)/total_weight), "EditionAPI")
 		if edition_poll > 1 - (weight_i) / total_weight then
-			if not (v.name == 'e_negative' and _no_neg) then -- skip return if negative is selected and _no_neg is true
+			if not ((v.name == 'e_negative' or v.name == 'e_bunc_fluorescent' or v.name == 'e_betm_vouchers_e_phantom' or v.name == 'e_ccc_mirrored') and _no_neg) then -- skip return if negative is selected and _no_neg is true
 				-- sendDebugMessage("Matched edition: "..v.name, "EditionAPI")
 				return v.name
 			end
