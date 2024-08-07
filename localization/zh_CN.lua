@@ -58,10 +58,10 @@ return {
     },
     misc = {
 		achievement_names = {
-			hidden_achievement = "???",
+			hidden_achievement = "？？？",
 		},
 		achievement_descriptions = {
-			hidden_achievement = "Play more to find out!", -- To be translated
+			hidden_achievement = "多玩几局，马上揭晓！",
 		},
         dictionary = {
 			b_mods = '模组',
@@ -85,7 +85,7 @@ return {
             b_by = ' 作者：',
        		b_config = "配置",
             b_additions = '新增项目',
-			b_achievements = "Achievements", -- To be translated
+			b_achievements = "成就",
             b_applies_stakes_1 = '',
 			b_applies_stakes_2 = '的限制也将起效',
 		},
