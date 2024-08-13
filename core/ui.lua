@@ -901,6 +901,16 @@ function buildModtag(mod)
             tag_message = 'load_failure_i'
 			specific_vars = {mod.load_issues.version_mismatch, MODDED_VERSION:gsub('-STEAMODDED', '')}
 		end
+		if mod.load_issues.prefix_conflict then
+			tag_message = 'load_failure_p'
+			local name = mod.load_issues.prefix_conflict
+			for _, m in ipairs(SMODS.mod_list) do
+				if m.id == mod.load_issues.prefix_conflict then
+					name = m.name or name
+				end
+			end
+			specific_vars = {name}
+		end
 		if mod.disabled then
 			tag_pos = {x = 1, y = 0}
 			tag_message = 'load_disabled'
@@ -955,8 +965,16 @@ end
 
 -- Helper function to create a clickable mod box
 local function createClickableModBox(modInfo, scale)
+	local function invert(c)
+			return {1-c[1], 1-c[2], 1-c[3], c[4]}
+		end
 	local col, text_col
-	modInfo.should_enable = not modInfo.disabled
+	if modInfo.should_enable == nil then
+		modInfo.should_enable = not modInfo.disabled
+	end
+	if SMODS.full_restart == nil then
+		SMODS.full_restart = 0
+	end
     if modInfo.can_load then
         col = G.C.BOOSTER
     elseif modInfo.disabled then
@@ -965,8 +983,14 @@ local function createClickableModBox(modInfo, scale)
         col = mix_colours(G.C.RED, G.C.UI.BACKGROUND_INACTIVE, 0.7)
         text_col = G.C.TEXT_DARK
     end
+	local label =  { " " .. modInfo.name .. " " }
+	if modInfo.lovely_only then
+		label[2] = localize('b_lovely_mod')
+	else
+		label[2] = localize('b_by') .. concatAuthors(modInfo.author) .. " "
+	end
 	local but = UIBox_button {
-        label = { " " .. modInfo.name .. " ", localize('b_by') .. concatAuthors(modInfo.author) .. " " },
+        label = label,
         shadow = true,
         scale = scale,
         colour = col,
@@ -975,10 +999,12 @@ local function createClickableModBox(modInfo, scale)
         minh = 0.8,
         minw = 7
     }
+	if modInfo.lovely_only then
+		local config = but.nodes[1].nodes[2].nodes[1].config
+		config.colour = mix_colours(invert(col), G.C.UI.TEXT_INACTIVE, 0.8)
+		config.scale = scale * .8
+	end
     if modInfo.version ~= '0.0.0' then
-		local function invert(c)
-			return {1-c[1], 1-c[2], 1-c[3], c[4]}
-		end
         table.insert(but.nodes[1].nodes[1].nodes, {
             n = G.UIT.T,
             config = {
@@ -1017,11 +1043,14 @@ local function createClickableModBox(modInfo, scale)
 					function(_set_toggle)
 						if not modInfo.should_enable then
 							NFS.write(modInfo.path .. '.lovelyignore', '')
-							SMODS.full_restart = true
 						else
 							NFS.remove(modInfo.path .. '.lovelyignore')
-							SMODS.full_restart = true
 						end
+						local toChange = 1
+						if modInfo.should_enable == not modInfo.disabled then
+							toChange = -1
+						end
+						SMODS.full_restart = SMODS.full_restart + toChange
 					end
 				)
 			}),
@@ -1044,8 +1073,14 @@ function G.FUNCS.mods_buttons_page(options)
 end
 
 function SMODS.load_mod_config(mod)
-	local config = load(NFS.read(('config/%s.jkr'):format(mod.id)) or 'return {}', ('=[SMODS %s "config"]'):format(mod.id))()
-	local default_config = load(NFS.read(('%sconfig.lua'):format(mod.path)) or 'return {}', ('=[SMODS %s "default_config"]'):format(mod.id))()
+	local s1, config = pcall(function()
+		return load(NFS.read(('config/%s.jkr'):format(mod.id)), ('=[SMODS %s "config"]'):format(mod.id))()
+	end)
+	local s2, default_config = pcall(function()
+		return load(NFS.read(('%sconfig.lua'):format(mod.path)), ('=[SMODS %s "default_config"]'):format(mod.id))()
+	end)
+	if not s1 or type(config) ~= 'table' then config = {} end
+	if not s2 or type(default_config) ~= 'table' then default_config = {} end
 	mod.config = {} 
 	for k, v in pairs(default_config) do mod.config[k] = v end
 	for k, v in pairs(config) do mod.config[k] = v end
@@ -1053,11 +1088,13 @@ function SMODS.load_mod_config(mod)
 end
 SMODS:load_mod_config()
 function SMODS.save_mod_config(mod)
-	NFS.createDirectory('config')
-	if not mod.config or not next(mod.config) then return false end
-	local serialized = 'return '..serialize(mod.config)
-	assert(NFS.write(('config/%s.jkr'):format(mod.id), serialized))
-	return true
+	local success = pcall(function()
+		NFS.createDirectory('config')
+		assert(mod.config and next(mod.config))
+		local serialized = 'return '..serialize(mod.config)
+		NFS.write(('config/%s.jkr'):format(mod.id), serialized)
+	end)
+	return success
 end
 function SMODS.save_all_config()
 	SMODS:save_mod_config()
@@ -1072,7 +1109,7 @@ end
 function G.FUNCS.exit_mods(e)
 	G.ACTIVE_MOD_UI = nil
 	SMODS.save_all_config()
-    if SMODS.full_restart then
+    if SMODS.full_restart ~= 0 then
 		-- launch a new instance of the game and quit the current one
 		SMODS.restart_game()
     end
@@ -1673,4 +1710,10 @@ function SMODS.GUI.dynamicModListContent(page)
         },
         nodes = modNodes
     }
+end
+
+G.FUNCS.SMODS_change_mipmap = function(args)
+	SMODS.config.graphics_mipmap_level = args.to_key
+	G:set_render_settings()
+	SMODS:save_mod_config()
 end
